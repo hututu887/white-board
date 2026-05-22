@@ -4,29 +4,17 @@
 
 @layer base {
 :root {
-    color: #e5e7eb;
-    background-color: #0b1120;
+    color: #1e293b;
+    background-color: #f8fafc;
 }
 
 body {
-    @apply min-h-screen bg-slate-950 text-slate-100 font-sans antialiased;
+    @apply min-h-screen bg-slate-50 text-slate-800 font-sans antialiased;
 }
 }
 
 .board-grid {
-  background: repeating-linear-gradient(
-      0deg,
-      rgba(255, 255, 255, 0.04),
-      rgba(255, 255, 255, 0.04) 1px,
-      transparent 1px,
-      transparent 24px
-    ),
-    repeating-linear-gradient(
-      90deg,
-      rgba(255, 255, 255, 0.04),
-      rgba(255, 255, 255, 0.04) 1px,
-      transparent 1px,
-      transparent 24px
-    ),
-    #0b1020;
+  background: radial-gradient(circle, #d4d4d8 1px, transparent 1px);
+  background-size: 20px 20px;
+  background-color: #ffffff;
 }

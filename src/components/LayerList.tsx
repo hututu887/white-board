@@ -34,15 +34,15 @@ export function LayerList() {
   const anyLocked = selectedShapes.some((s) => s.locked)
 
   return (
-    <section className="rounded-2xl border border-slate-800 bg-slate-900/70 p-3 shadow-xl">
-      <div className="mb-2 flex items-center justify-between text-sm font-semibold">
+    <section className="rounded-2xl border border-slate-200 bg-white/80 p-3 shadow-lg">
+      <div className="mb-2 flex items-center justify-between text-sm font-semibold text-slate-700">
         <span>图层</span>
         <span className="text-xs text-slate-400">{shapes.length} 个元素</span>
       </div>
       <div className="mb-2 grid grid-cols-2 gap-2 text-xs">
         <button
           type="button"
-          className="rounded-lg border border-slate-800 bg-slate-900 px-2 py-1 disabled:opacity-50"
+          className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-slate-600 transition hover:border-indigo-400 hover:bg-indigo-50 disabled:opacity-40"
           disabled={!hasSelection}
           onClick={() => groupShapes(selectedIds)}
         >
@@ -50,7 +50,7 @@ export function LayerList() {
         </button>
         <button
           type="button"
-          className="rounded-lg border border-slate-800 bg-slate-900 px-2 py-1 disabled:opacity-50"
+          className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-slate-600 transition hover:border-indigo-400 hover:bg-indigo-50 disabled:opacity-40"
           disabled={!hasSelection}
           onClick={() => ungroupShapes(selectedIds)}
         >
@@ -58,7 +58,7 @@ export function LayerList() {
         </button>
         <button
           type="button"
-          className="rounded-lg border border-slate-800 bg-slate-900 px-2 py-1 disabled:opacity-50"
+          className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-slate-600 transition hover:border-indigo-400 hover:bg-indigo-50 disabled:opacity-40"
           disabled={!hasSelection || anyLocked}
           onClick={() => toggleLock(selectedIds, true)}
         >
@@ -66,7 +66,7 @@ export function LayerList() {
         </button>
         <button
           type="button"
-          className="rounded-lg border border-slate-800 bg-slate-900 px-2 py-1 disabled:opacity-50"
+          className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-slate-600 transition hover:border-indigo-400 hover:bg-indigo-50 disabled:opacity-40"
           disabled={!hasSelection || !anyLocked}
           onClick={() => toggleLock(selectedIds, false)}
         >
@@ -75,7 +75,7 @@ export function LayerList() {
       </div>
       <div className="flex flex-col gap-2">
         {shapes.length === 0 && (
-          <div className="text-sm text-slate-500">还没有任何图形，试试左侧工具吧。</div>
+          <div className="text-sm text-slate-400">还没有任何图形，试试左侧工具吧。</div>
         )}
         {shapes
           .slice()
@@ -86,8 +86,8 @@ export function LayerList() {
               <button
                 type="button"
                 key={shape.id}
-                className={`flex items-center justify-between rounded-xl border px-3 py-2 text-sm transition hover:border-sky-400 hover:bg-sky-500/10 ${
-                  isActive ? 'border-sky-400 bg-sky-500/15' : 'border-slate-800 bg-slate-900'
+                className={`flex items-center justify-between rounded-xl border px-3 py-2 text-sm transition hover:border-indigo-400 hover:bg-indigo-50 ${
+                  isActive ? 'border-indigo-400 bg-indigo-50 text-indigo-700' : 'border-slate-200 bg-white text-slate-600'
                 }`}
                 onClick={(event) => {
                   if (event.shiftKey) {
@@ -103,12 +103,12 @@ export function LayerList() {
                 <span className="flex items-center gap-2">
                   <span>{shapeLabel(shape)}</span>
                   {shape.locked && (
-                    <span className="rounded bg-slate-800 px-1 text-[11px] text-slate-300">
+                    <span className="rounded bg-slate-100 px-1 text-[11px] text-slate-500">
                       锁
                     </span>
                   )}
                   {shape.groupId && (
-                    <span className="rounded bg-slate-800 px-1 text-[11px] text-slate-300">
+                    <span className="rounded bg-slate-100 px-1 text-[11px] text-slate-500">
                       组
                     </span>
                   )}

@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { persist } from 'zustand/middleware'
 import { nanoid } from 'nanoid'
 import type { Role, Shape, Tool } from '../types/shape'
 
@@ -88,12 +89,14 @@ const mergeUserSnapshot = (state: WhiteboardState, userId: string, userSnapshot:
 const getActiveUserId = (state: WhiteboardState) => state.currentUserId ?? DEFAULT_USER_ID
 const isReadOnly = (state: WhiteboardState) => state.role === 'viewer'
 
-export const useWhiteboardStore = create<WhiteboardState>((set, get) => ({
+export const useWhiteboardStore = create<WhiteboardState>()(
+  persist(
+    (set, get) => ({
   shapes: [],//图形列表。存储白板上所有图形对象的数据。
   selectedIds: [],//选中 ID 列表。存储当前选中的图形的 ID 数组。
   activeTool: 'select',//当前活跃工具。例如：'select'（选择）、'draw'（画笔）、'rect'（矩形）等。
   stroke: '#008c8c',//当前工具的描边颜色。
-  fill: '#0b1120',//当前工具的填充颜色。
+  fill: 'none',//当前工具的填充颜色。
   strokeWidth: 2,//当前工具的描边宽度。
   opacity: 0.95,//当前工具的不透明度。
   version: 0,//version 是：👉 用来标记“白板状态变化次数”的计数器,在协作同步时起关键作用
@@ -284,6 +287,14 @@ export const useWhiteboardStore = create<WhiteboardState>((set, get) => ({
     const userId = getActiveUserId(state)
     return getUserHistory(state, userId).future.length > 0
   },
-}))
+  }),
+  {
+    name: 'whiteboard-shapes',
+    partialize: (state) => ({
+      shapes: state.shapes,
+      version: state.version,
+    }),
+  },
+))
 
 

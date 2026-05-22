@@ -55,6 +55,7 @@ function useProvideCollaboration(roomId?: string): CollaborationContextValue {
 
   const clientRef = useRef<RealtimeClient | null>(null)
   const skipNextBroadcast = useRef(false)
+  const prevShapesRef = useRef<Shape[]>([])
   const presenceThrottle = useRef(0)
   const snapshotTimer = useRef<number | null>(null)
   const [error, setError] = useState<string | undefined>(undefined)
@@ -123,8 +124,22 @@ function useProvideCollaboration(roomId?: string): CollaborationContextValue {
     if (!client || status !== 'connected') return
     if (skipNextBroadcast.current) {
       skipNextBroadcast.current = false
+      prevShapesRef.current = shapes
       return
     }
+
+    // 增量通道：找出新增或更新的图形，立刻发送
+    // 注意：删除不通过增量通道传播——120ms 后的快照通道会兜底处理
+    const prevShapes = prevShapesRef.current
+    shapes.forEach((shape) => {
+      const prev = prevShapes.find((s) => s.id === shape.id)
+      if (!prev || prev.updatedAt !== shape.updatedAt) {
+        client.emitShape(shape)
+      }
+    })
+    prevShapesRef.current = shapes
+
+    // 快照通道：debounce 120ms 全量兜底
     if (snapshotTimer.current) window.clearTimeout(snapshotTimer.current)
     snapshotTimer.current = window.setTimeout(() => {
       client.emitSnapshot({ shapes, updatedAt: Date.now() })

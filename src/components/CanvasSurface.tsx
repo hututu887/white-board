@@ -21,6 +21,12 @@ type TextEditing = {
   color: string
 }
 
+type DragSession = {
+  startPoint: Point
+  shapeIds: string[]
+  startPositions: { id: string; x: number; y: number }[]
+}
+
 const MIN_SHAPE_SIZE = 4
 //最小形状大小，用于限制形状大小。
 const MIN_SCALE = 0.25
@@ -85,6 +91,9 @@ export function CanvasSurface() {
     addShape,
     updateShape,
     selectShapes,
+    removeShapes,
+    setActiveTool,
+    clearSelection,
   } = useWhiteboardStore(
     useShallow((state) => ({
       shapes: state.shapes,
@@ -97,6 +106,9 @@ export function CanvasSurface() {
       addShape: state.addShape,
       updateShape: state.updateShape,
       selectShapes: state.selectShapes,
+      removeShapes: state.removeShapes,
+      setActiveTool: state.setActiveTool,
+      clearSelection: state.clearSelection,
     })),
   )//选择器，选择相关状态，仅当被选择状态改变，才触发重渲染
 
@@ -109,6 +121,10 @@ export function CanvasSurface() {
     startClient: Point//鼠标按下时客户端的坐标
     startPan: Point//鼠标按下时平移的坐标
   } | null>(null)
+  const [dragSession, setDragSession] = useState<DragSession | null>(null)
+  const [dragOffset, setDragOffset] = useState<Point>({ x: 0, y: 0 })
+  const dragOffsetRef = useRef<Point>({ x: 0, y: 0 })
+  const dragDoneRef = useRef(false)
   const [editing, setEditing] = useState<TextEditing | null>(null)//文本内容
   const inputRef = useRef<HTMLInputElement | null>(null)//准备一个input容器
 
@@ -247,6 +263,15 @@ export function CanvasSurface() {
     setDraft({ origin: start, shape: base })
   }
 
+  // 扩展组内联动：如果图形有 groupId，返回同组所有图形的 id
+  const getGroupIds = (shapeId: string): string[] => {
+    const shape = shapes.find((item) => item.id === shapeId)
+    if (!shape?.groupId) return [shapeId]
+    return shapes
+      .filter((item) => item.groupId === shape.groupId && !item.locked)
+      .map((item) => item.id)
+  }
+
   const handlePointerDown = (event: React.PointerEvent<SVGSVGElement>) => {
     if (!event.isPrimary) return
     const point = toCanvasPoint(event)
@@ -254,20 +279,72 @@ export function CanvasSurface() {
     if (activeTool === 'select') {
       const id = hitTest(point)
       if (id) {
-        if (event.shiftKey) {//检查是否按住shift，是用来支持多选逻辑的
+        const groupIds = getGroupIds(id)
+
+        // 按住 Shift → 多选切换，不触发拖拽
+        if (event.shiftKey) {
           const exists = selectedIds.includes(id)
-          const next = exists ? selectedIds.filter((item) => item !== id) : [...selectedIds, id]
+          const next = exists
+            ? selectedIds.filter((item) => !groupIds.includes(item))
+            : [...selectedIds, ...groupIds]
           selectShapes(next)
-        } else {
-          selectShapes([id])
+          return
         }
-      } else {
-        setPanSession({
-          startClient: { x: event.clientX, y: event.clientY },
-          startPan: pan,
+
+        // 点击已选中的图形（或其组成员）→ 保持多选 + 启动拖拽
+        if (groupIds.some((gid) => selectedIds.includes(gid))) {
+          const merged = [...new Set([...selectedIds, ...groupIds])]
+          const dragIds = merged.filter((sid) => {
+            const s = shapes.find((item) => item.id === sid)
+            return s && !s.locked
+          })
+          selectShapes(merged)
+          if (dragIds.length > 0) {
+            dragDoneRef.current = false
+            setDragSession({
+              startPoint: point,
+              shapeIds: dragIds,
+              startPositions: dragIds.map((sid) => {
+                const s = shapes.find((item) => item.id === sid)!
+                return { id: sid, x: s.x, y: s.y }
+              }),
+            })
+            setDragOffset({ x: 0, y: 0 })
+            dragOffsetRef.current = { x: 0, y: 0 }
+            event.currentTarget.setPointerCapture(event.pointerId)
+          }
+          return
+        }
+
+        // 点击未选中的图形 → 选中整组 + 启动拖拽
+        selectShapes(groupIds)
+        const dragIds = groupIds.filter((sid) => {
+          const s = shapes.find((item) => item.id === sid)
+          return s && !s.locked
         })
-        event.currentTarget.setPointerCapture(event.pointerId)
+        if (dragIds.length > 0) {
+          dragDoneRef.current = false
+          setDragSession({
+            startPoint: point,
+            shapeIds: dragIds,
+            startPositions: dragIds.map((sid) => {
+              const s = shapes.find((item) => item.id === sid)!
+              return { id: sid, x: s.x, y: s.y }
+            }),
+          })
+          setDragOffset({ x: 0, y: 0 })
+          dragOffsetRef.current = { x: 0, y: 0 }
+          event.currentTarget.setPointerCapture(event.pointerId)
+        }
+        return
       }
+      // 点击空白 → 取消选中 + 平移
+      clearSelection()
+      setPanSession({
+        startClient: { x: event.clientX, y: event.clientY },
+        startPan: pan,
+      })
+      event.currentTarget.setPointerCapture(event.pointerId)
       return
     }
     event.preventDefault()
@@ -295,6 +372,16 @@ export function CanvasSurface() {
       const dx = event.clientX - panSession.startClient.x
       const dy = event.clientY - panSession.startClient.y
       setPan({ x: panSession.startPan.x + dx, y: panSession.startPan.y + dy })
+      return
+    }
+    if (dragSession) {
+      const current = toCanvasPoint(event)
+      const offset = {
+        x: current.x - dragSession.startPoint.x,
+        y: current.y - dragSession.startPoint.y,
+      }
+      dragOffsetRef.current = offset
+      setDragOffset(offset)
       return
     }
     if (!draft) return
@@ -348,6 +435,36 @@ export function CanvasSurface() {
       setPanSession(null)
       return
     }
+    if (dragSession) {
+      if (dragDoneRef.current) return
+      dragDoneRef.current = true
+      const offset = dragOffsetRef.current
+      if (offset.x !== 0 || offset.y !== 0) {
+        dragSession.startPositions.forEach(({ id, x, y }) => {
+          const nx = x + offset.x
+          const ny = y + offset.y
+          updateShape(id, (shape) => {
+            const updated: Shape = {
+              ...shape,
+              x: nx,
+              y: ny,
+              updatedAt: Date.now(),
+            }
+            if ((shape.type === 'free' || shape.type === 'line') && shape.points) {
+              updated.points = shape.points.map((p) => ({
+                x: p.x + offset.x,
+                y: p.y + offset.y,
+              }))
+            }
+            return updated
+          })
+        })
+      }
+      setDragSession(null)
+      setDragOffset({ x: 0, y: 0 })
+      dragOffsetRef.current = { x: 0, y: 0 }
+      return
+    }
     finalizeDraft()
   }
 
@@ -399,6 +516,54 @@ export function CanvasSurface() {
       inputRef.current.select()
     }
   }, [editing])
+
+  // 键盘快捷键：删除 + 工具切换
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // 正在编辑文本时不拦截按键
+      if (editing) return
+      // 焦点在 input/textarea 上时不拦截
+      const tag = (e.target as HTMLElement)?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return
+
+      // Delete / Backspace → 删除选中图形（跳过锁定的）
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        const state = useWhiteboardStore.getState()
+        const ids = state.selectedIds.filter((sid) => {
+          const s = state.shapes.find((item) => item.id === sid)
+          return s && !s.locked
+        })
+        if (ids.length > 0) {
+          e.preventDefault()
+          removeShapes(ids)
+        }
+        return
+      }
+
+      // 工具快捷键（不区分大小写，不拦截 Ctrl/Meta 组合键）
+      if (e.ctrlKey || e.metaKey) return
+      const keyMap: Record<string, Tool> = {
+        v: 'select',
+        p: 'pencil',
+        r: 'rectangle',
+        o: 'ellipse',
+        l: 'line',
+        t: 'text',
+      }
+      const tool = keyMap[e.key.toLowerCase()]
+      if (tool) {
+        e.preventDefault()
+        setActiveTool(tool)
+      }
+
+      // Escape → 取消选中
+      if (e.key === 'Escape') {
+        clearSelection()
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [editing, removeShapes, setActiveTool, clearSelection])
 
   const commitEditing = (newValue: string) => {
     const target = editing
@@ -488,7 +653,7 @@ export function CanvasSurface() {
         y={shape.y + 24}
         fill={shape.stroke}
         className={`${selectedClass} font-semibold tracking-tight`}
-        style={{ paintOrder: 'stroke', stroke: '#0b1120', strokeWidth: 1 }}
+        style={{ paintOrder: 'stroke', stroke: '#ffffff', strokeWidth: 1 }}
       >
         {shape.text ?? '文本'}
       </text>
@@ -509,7 +674,17 @@ export function CanvasSurface() {
         onDoubleClick={handleDoubleClick}
       >
         <g transform={`translate(${pan.x} ${pan.y}) scale(${scale})`}>
-          {shapes.map(renderShape)}
+          {shapes.map((shape) => {
+            const el = renderShape(shape)
+            if (dragSession && dragSession.shapeIds.includes(shape.id)) {
+              return (
+                <g key={shape.id} transform={`translate(${dragOffset.x} ${dragOffset.y})`}>
+                  {el}
+                </g>
+              )
+            }
+            return el
+          })}
           {draft && <g>{renderShape(draft.shape)}</g>}
           {peers
             .filter((peer) => peer.cursor)
@@ -521,7 +696,7 @@ export function CanvasSurface() {
                   y={-8}
                   className="text-xs font-semibold"
                   fill={peer.color}
-                  style={{ paintOrder: 'stroke', stroke: '#0b1120', strokeWidth: 1 }}
+                  style={{ paintOrder: 'stroke', stroke: '#ffffff', strokeWidth: 1 }}
                 >
                   {peer.name}
                 </text>
@@ -553,7 +728,7 @@ export function CanvasSurface() {
           }}
         />
       )}
-      <div className="pointer-events-none absolute left-3 bottom-3 rounded-md border border-slate-800 bg-slate-900/80 px-2 py-1 text-xs text-slate-200">
+      <div className="pointer-events-none absolute left-3 bottom-3 rounded-md border border-slate-200 bg-white/80 px-2 py-1 text-xs text-slate-500">
         缩放 {Math.round(scale * 100)}%
       </div>
     </div>
